@@ -5,6 +5,8 @@ export default {
         email: null,
         password: null,
         persist: false,
+        remote_url : null,
+        repo : null
     },
     mutations: {
     	commitUser (state, user){
@@ -17,12 +19,27 @@ export default {
     		if (typeof user.password != 'undefined'){
     			state.password = user.password;
     		}
-    	}
+            if (typeof user.remote_url != 'undefined'){
+                state.password = user.password;
+            }
+    	},
+        commitRepo (state, repo){
+            state.repo = repo;
+        },
+        commitRemoteUrl (state, url){
+            state.remote_url = url;
+        }
     },
     actions: {
     	setUser : ({commit}, payload) =>{
     		commit('commitUser', payload);
-    	}
+    	},
+        setRepo : ({commit}, label) =>{
+            commit('commitRepo', label);
+        },
+        setRemoteUrl : ({commit}, url) =>{
+            commit('commitRemoteUrl', url);
+        },
     },
     getters: {}
 }
