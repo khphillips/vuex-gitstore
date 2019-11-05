@@ -18,7 +18,7 @@
     "orm"
   ],
   "author": "Keith Phillips",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "fs-jetpack": "^2.2.3",
     "simple-git": "^1.126.0"
