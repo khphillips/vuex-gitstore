@@ -44,13 +44,13 @@ const database = new VuexORM.Database()
 database.register(Item)
 
 const store = new Vuex.Store({
-  plugins: [
-  	VuexORM.install(database),
-  	config.storage.driver.install({
-  		key : 'entities', 
-  		repo : 'darknote',
-  		root_path : 'darknoteData/'
-  	})
+	plugins: [
+  		VuexORM.install(database),
+  		config.storage.driver.install({
+	  		key : 'entities', 
+	  		repo : 'darknote',
+	  		root_path : 'darknoteData/'
+  		})
   	]
 })
 
