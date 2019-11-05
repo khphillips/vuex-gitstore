@@ -1,16 +1,17 @@
 # vuex-gitstore
 
-Intended use with Electron or server side javascript as it needs access to the local file system. git-js dependency.
+Intended use with Electron or server side javascript as it needs access to the local file system. git-js dependency. Will save the entire store.state to individual json files for each key within the root. Options to pass a key to store only portions of the state. 
 
 ```javascript
 import Vue from 'vue'
 import Vuex from 'vuex'
+import GitStore from 'vuex-gitstore'
 
 Vue.use(Vuex)
 
 const store = new Vuex.Store({
   plugins: [
-  	config.storage.driver.install({})
+  	GitStore.install({})//pass options.
   	]
 })
 
