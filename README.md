@@ -18,7 +18,7 @@ const store = new Vuex.Store({
 export default store
 ```
 
-##Pass options
+## Pass options
 
 __key__ if you only want to target one key within the vuex store state, assign it here. For example with Vuex ORM use {key : 'entities'},
 
@@ -28,7 +28,7 @@ __repo__ rename the default repo folder/name to something else. default is 'data
 __root_path__ change where the json files are kept. default is 'gitstoreData/'
 {repo : 'my_data/somewhere_else/'}
 
-##User with Vuex ORM
+## User with Vuex ORM
 
 ```javascript
 import Vue from 'vue'
