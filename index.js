@@ -96,8 +96,8 @@ export default {
 			return object.repo;
 		}
 		if (typeof state.gitstore != 'undefined' && state.gitstore != null){
-			if (typeof state.gitstore.state.repo != 'undefined' && state.gitstore.state.repo != null){
-				return state.gitstore.state.repo;
+			if (typeof state.gitstore.repo != 'undefined' && state.gitstore.repo != null){
+				return state.gitstore.repo;
 			}
 		}
 		return this.repo;
@@ -177,10 +177,9 @@ export default {
      * @return {[type]}      [description]
      */
     commitObjects(key, repo){
-    	console.log(this.store.gitstore.state);
     	var g = _git(this.root_path + repo)
-        		.addConfig('user.name', 'DarkNote')
-    			.addConfig('user.email', 'some@one.com')
+        		.addConfig('user.name', this.store.gitstore.username)
+    			.addConfig('user.email', this.store.gitstore.email)
     			.add(key + '.json')
        			.commit("Data update: " + key);
     }
