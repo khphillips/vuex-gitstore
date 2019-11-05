@@ -10,9 +10,9 @@ import GitStore from 'vuex-gitstore'
 Vue.use(Vuex)
 
 const store = new Vuex.Store({
-  plugins: [
-  	GitStore.install({})//pass options.
-  	]
+	plugins: [
+		GitStore.install({})//pass options.
+	]
 })
 
 export default store
@@ -28,7 +28,7 @@ __repo__ rename the default repo folder/name to something else. default is 'data
 __root_path__ change where the json files are kept. default is 'gitstoreData/'
 {repo : 'my_data/somewhere_else/'}
 
-## User with Vuex ORM
+## Use with Vuex ORM
 
 ```javascript
 import Vue from 'vue'
