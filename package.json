@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "A plugin for Vuex to sync the store with a git repository."
+    "url": "https://github.com/khphillips/vuex-gitstore"
   },
   "keywords": [
     "vuex",
