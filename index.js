@@ -35,6 +35,14 @@ export default {
 			  	GitStoreModule
 			)
 
+	    	if (g.store.state.gitstore.remote_url != null && g.store.state.gitstore.repo != null){
+	    		this.repo = g.store.state.gitstore.repo;
+	    		this.checkRepo(g.store.state.gitstore.repo);
+		    	g.addRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url, function(){
+		    		g.pullFromRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url, function(){});
+		    	})
+	    	}
+
 	    	//grab the entired saved state from the repo
 	    	//TODO: do a pull from the remote if available to get the latest. 
 	    	var savedState = {};
@@ -59,6 +67,8 @@ export default {
 		        clone: false,
 			}));
 		    
+
+
 		    //subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
 		    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
@@ -177,11 +187,51 @@ export default {
      * @return {[type]}      [description]
      */
     commitObjects(key, repo){
-    	var g = _git(this.root_path + repo)
-        		.addConfig('user.name', this.store.gitstore.username)
-    			.addConfig('user.email', this.store.gitstore.email)
+    	var username = this.store.state.gitstore.username ? this.store.state.gitstore.username : 'gitData'
+    	var email = this.store.state.gitstore.email ? this.store.state.gitstore.email : 'gitData@gitData.com'
+    	var git = _git(this.root_path + repo)
+        		.addConfig('user.name', username)
+    			.addConfig('user.email', email)
     			.add(key + '.json')
        			.commit("Data update: " + key);
+       	if (this.store.state.gitstore.remote_url != null && this.store.state.gitstore.repo != null){
+       		var g = this;
+    		this.addRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url, function(){
+    			g.pushToRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url);
+    		})
+    	}
+    },
+
+    addRemote(repo, url, callback){
+    	var g = _git(this.root_path + repo);
+    	var remotes = g.listRemote(['--get-url'], function(err, data){
+    		console.log(err, data)
+    		if (err){
+    			g.addRemote('origin', url, function(err, data){
+		    		callback();
+		    	})
+    		}else{
+    			callback();
+    		}
+    	});
+    },
+
+    pushToRemote(repo, url, callback){
+    	console.log('pushing');
+    	var g = _git(this.root_path + repo)
+    		.push('origin', 'master', function(err, data){
+	    		console.log('pushed', err, data)
+	    		callback();
+	    	})
+    },
+
+    pullFromRemote(repo, url, callback){
+    	console.log('pullling');
+    	var g = _git(this.root_path + repo)
+    		.pull('origin', 'master', function(f){
+	    		console.log('remote added', f)
+	    		callback();
+	    	})
     }
     
 }

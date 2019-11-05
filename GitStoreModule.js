@@ -6,7 +6,7 @@ export default {
         password: null,
         persist: false,
         remote_url : null,
-        repo : null
+        repo : null,
     },
     mutations: {
     	commitUser (state, user){
@@ -19,9 +19,6 @@ export default {
     		if (typeof user.password != 'undefined'){
     			state.password = user.password;
     		}
-            if (typeof user.remote_url != 'undefined'){
-                state.password = user.password;
-            }
     	},
         commitRepo (state, repo){
             state.repo = repo;
