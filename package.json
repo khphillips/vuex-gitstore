@@ -1,6 +1,6 @@
 {
   "name": "vuex-gitstore",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A plugin for Vuex to sync the store with a git repository.",
   "main": "index.js",
   "scripts": {
