@@ -10,12 +10,15 @@ export default {
 	repo : null,
 	root_path : null,
 
+	store : {},
+
 	install(options){
 		this.options = this.options || {};
 		this.key = options.key || null; //'entities';//this is the vuex-orm default keys
 		this.repo = options.repo || 'data';
 		this.root_path = options.root_path || 'gitstoreData/';
 
+		//checks if repo exists as a folder and initializes one if not.
 		if (this.repo){
 			if(!jetpack.exists(this.root_path + this.repo)){
 				this.checkRepo(this.repo);
@@ -23,35 +26,40 @@ export default {
 		}
 		
 		var g = this;
+
+		//returns to vues for install
 	    return function(store) {
+	    	this.store = store;
+	    	//register our module so we can store information about the repo. 
 	    	store.registerModule('gitstore', 
 			  	GitStoreModule
 			)
 
+	    	//grab the entired saved state from the repo
+	    	//TODO: do a pull from the remote if available to get the latest. 
 	    	var savedState = {};
 	    	var currentState = g.key ? store.state[g.key] : store.state;
-	    	console.log(currentState);
 	    	//only update the state for items we have files for. 
 	    	for (var k in currentState){
 	    		if (k.indexOf('$') == -1){
 	    			var repo = g.whichRepo(currentState[k], currentState)
     				var obj = g.getObject(k, currentState[k].repo != null ? currentState[k].repo : g.repo);
-    				console.log(repo, obj)
 	    			if (obj != null){
 	    				savedState[k] = obj;
 	    			}
 	    		}
 	    	}
 	    	var new_state = savedState
-
+	    	//if we have a key, then we will update the key of saved state with the new state from git repo. 
 	    	if (g.key){
 	    		new_state = {}
 	    		new_state[g.key] = savedState
 	    	}
-
 		    store.replaceState(merge(store.state, new_state, {
 		        clone: false,
 			}));
+		    
+		    //subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
 		    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
 		    	if(g.key != null){
@@ -71,7 +79,7 @@ export default {
 		    		}
 		    		repo = g.whichRepo({}, state);
 		    	}
-		    	console.log(key, key_state)
+		    	//if object is marked as "persist == false" then don't store it. 
 		    	if (typeof key_state != 'undefined' && (typeof key_state.persist == 'undefined' || key_state.persist === true) ){
 		    		g.setObject(key, key_state, repo);
 		    	}
@@ -79,18 +87,27 @@ export default {
 	    }
 	},
 
+	//give the information find out which is the most approrpriate repo to store...
+	//If the object passed has a "repo" assigned, then store it there
+	//Next check if the fitstore state has a repo assigned
+	//last if none of the others, use the repo assigned int he options when plugin was installed. 
 	whichRepo(object, state){
 		if (typeof object != 'undefined' && typeof object.repo != 'undefined' && object.repo != null){
 			return object.repo;
 		}
-		if (typeof state.gitStore != 'undefined' && state.gitStore != null){
-			if (typeof state.gitstore.repo != 'undefined' && state.gitstore.repo != null){
-				return state.gitstore.repo;
+		if (typeof state.gitstore != 'undefined' && state.gitstore != null){
+			if (typeof state.gitstore.state.repo != 'undefined' && state.gitstore.state.repo != null){
+				return state.gitstore.state.repo;
 			}
 		}
 		return this.repo;
 	},
 
+	/**
+	 * Checks if the repo exists, if not create the path and initializes repo
+	 * @param  {[type]} repo [description]
+	 * @return {[type]}      [description]
+	 */
 	checkRepo(repo){
 		if (repo){
 			if(!jetpack.exists(this.root_path + repo)){
@@ -99,9 +116,11 @@ export default {
 		}
 	},
 
-	/*
-	Maybe add a readme for this repo for the initial commit
-	*/
+	/**
+	 * Creates the directory and initializes the repo with the default readme file. 
+	 * @param  {[type]} repo [description]
+	 * @return {[type]}      [description]
+	 */
 	initRepo(repo){
 		jetpack.dir(this.root_path + repo);
 		jetpack.write(this.root_path + repo + '/README.md', "A Vuex-GitStore Data Repository. https://github.com/khphillips/vuex-gitstore")
@@ -111,6 +130,12 @@ export default {
 			.commit("First commit! Initializing Data")
 	},
 
+	/**
+	 * Workhorse... gets a key from the repo, parses the json and returns it. 
+	 * @param  {[type]} key  [description]
+	 * @param  {[type]} repo [description]
+	 * @return {[type]}      [description]
+	 */
 	getObject(key, repo){
 		if (this.repo){
 			this.checkRepo(repo);
@@ -118,7 +143,6 @@ export default {
 		}else{
 			path = this.root_path + key + '.json';
 		}
-		console.log(path)
 		var str = jetpack.read(path);
 		if (typeof str == 'undefined'){
 			return null
@@ -126,6 +150,14 @@ export default {
         return JSON.parse(str);
 	},
 
+	/**
+	 * Workhorse.... sets a key value pair and saves it to the repo as JSON. 
+	 * Uses Async write so it doesn't hodl anythign up...
+	 * TODO: if remote url is available, try pushing to remote... maybe debounce that shit. 
+	 * @param {[type]} key   [description]
+	 * @param {[type]} value [description]
+	 * @param {[type]} repo  [description]
+	 */
     setObject(key, value, repo) {
         value = JSON.stringify(value, null, 2);
         var g = this
@@ -138,8 +170,14 @@ export default {
         }
     },
 
-
+    /**
+     * Commits the changes to the data in the repo. 
+     * @param  {[type]} key  [description]
+     * @param  {[type]} repo [description]
+     * @return {[type]}      [description]
+     */
     commitObjects(key, repo){
+    	console.log(this.store.gitstore.state);
     	var g = _git(this.root_path + repo)
         		.addConfig('user.name', 'DarkNote')
     			.addConfig('user.email', 'some@one.com')
