@@ -29,7 +29,7 @@ export default {
 
 		//returns to vues for install
 	    return function(store) {
-	    	this.store = store;
+	    	g.store = store;
 	    	//register our module so we can store information about the repo. 
 	    	store.registerModule('gitstore', 
 			  	GitStoreModule
