@@ -21,26 +21,24 @@ export default {
 	key : null,
 	repo : null,
 	root_path : null,
-
 	store : {},
 
 	install(options){
 		this.options = this.options || {};
 		this.key = options.key || null; //'entities';//this is the vuex-orm default keys
-		this.repo = options.repo || 'data';
 		this.root_path = options.root_path || 'gitstoreData/';
 
 		//checks if repo exists as a folder and initializes one if not.
-		if (this.repo){
-			if(!jetpack.exists(this.root_path + this.repo)){
-				this.checkRepo(this.repo);
-			}
-		}
+		//if (this.repo){
+		//	if(!jetpack.exists(this.root_path + this.repo)){
+		//		this.checkRepo(this.repo);
+		//	}
+		//}
 		
 		var g = this;
 
 		//returns to vues for install
-	    return function(store) {
+	    var f = function(store) {
 	    	console.log('plugin function')
 	    	g.store = store;
 	    	//register our module so we can store information about the repo. 
@@ -48,79 +46,116 @@ export default {
 			  	GitStoreModule
 			)
 
-	    	g.refreshStateFromRepo(g.key, store, g.repo, g)
+	    	g.refreshStateFromRepo()
 
-
+	    	//var g = this;
 	    	//subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
 		    	console.log('subscribe', mutation);
-		    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
-		    	if(g.key != null){
-		    		var key = mutation.payload.entity;
-		    		var key_state = state[g.key][mutation.payload.entity];
-		    		var repo = g.whichRepo(state[g.key][mutation.payload.entity], state);
-		    	}else{
-		    		var key = null;
-		    		if (mutation.type.indexOf('/')){
-		    			//this is a module mutation, grab the data from that namespace.
-		    			var key = mutation.type.split('/')[0];
-		    			key_state = state[key]
-		    		}else{
-		    			//don't have a key, grab the data from the root of state.
-		    			key = mutation.payload.entity;
-		    			key_state = state[key];
-		    		}
-		    		repo = g.whichRepo({}, state);
-		    	}
-		    	//if object is marked as "persist == false" then don't store it. 
-		    	if (typeof key_state != 'undefined' && (typeof key_state.persist == 'undefined' || key_state.persist === true) ){
-		    		g.setObject(key, key_state, repo);
-		    	}
+		    	var repo = state.gitstore.repo;
+		    	if (state.gitstore.repo){
+			    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
+			    	if(g.key != null){
+			    		var key = mutation.payload.entity;
+			    		var key_state = state[g.key][mutation.payload.entity];
+			    	}else{
+			    		key = null;
+			    		if (mutation.type.indexOf('/')){
+			    			//this is a module mutation, grab the data from that namespace.
+			    			key = mutation.type.split('/')[0];
+			    			key_state = state[key]
+			    		}else{
+			    			//don't have a key, grab the data from the root of state.
+			    			key = mutation.payload.entity;
+			    			key_state = state[key];
+			    		}
+			    	}
+			    	//if object is marked as "persist == false" then don't store it. 
+			    	if (typeof key_state != 'undefined' && (typeof key_state.persist == 'undefined' || key_state.persist === true) ){
+			    		g.setObject(key, key_state, repo);
+			    	}
+			    }else{
+			    	console.log('no repo - no save');
+			    }
 		  	})
+	    }
+	    return f;
+	},
+
+
+	//loads all files in repo and refreshes the state.
+	refreshStateFromRepo(overwrite){
+		var key = this.key
+		var store = this.store
+		var g = this;
+		if(store.state.gitstore.repo){
+			var path = this.root_path + store.state.gitstore.repo;
+			console.log('path', path);
+			var git = _git()
+    			.pull('origin', 'master', function(err, data){
+		    		console.log('pulled before refresh2', path)
+		    		console.log('error?', err)
+		    		//grab the entired saved state from the repo
+			    	//TODO: do a pull from the remote if available to get the latest. 
+			    	var savedState = {};
+			    	var currentState = key ? store.state[key] : store.state;
+			    	//only update the state for items we have files for.
+			    	console.log(currentState) 
+			    	for (var k in currentState){
+			    		if (k.indexOf('$') == -1){
+			    			console.log(store.state.gitstore.repo)
+							var obj = g.getObject(k, store.state.gitstore.repo);
+			    			if (obj != null){
+			    				savedState[k] = obj;
+			    			}
+			    		}
+			    	}
+			    	var new_state = savedState;
+			    	if (key){
+			    		new_state = {}
+			    		new_state[key] = savedState
+			    	}
+			    	console.log(new_state)
+			    	if(overwrite === true){
+			    		console.log('overwriting', {...store.state, ...new_state})
+			    		store.replaceState({...store.state, ...new_state});
+			    	}else{
+			    		console.log('merging')
+			    		store.replaceState(merge(store.state, new_state, {
+				        	clone: false,
+						}));
+			    	}
+				    
+		    	})
 	    }
 	},
 
-	refreshStateFromRepo(key, store, repo, g){
-
-		//grab the entired saved state from the repo
-    	//TODO: do a pull from the remote if available to get the latest. 
-    	var savedState = {};
-    	var currentState = key ? store.state[g.key] : store.state;
-    	//only update the state for items we have files for. 
-    	for (var k in currentState){
-    		if (k.indexOf('$') == -1){
-				var obj = g.getObject(k, repo);
-    			if (obj != null){
-    				savedState[k] = obj;
-    			}
-    		}
-    	}
-    	var new_state = savedState;
-    	if (g.key){
-    		new_state = {}
-    		new_state[g.key] = savedState
-    	}
-	    store.replaceState(merge(store.state, new_state, {
-	        clone: false,
-		}));
-    	return savedState;
+	newLocalRepo(repo, callback){
+		var path = this.root_path + repo;
+		if(jetpack.exists(path)){
+			callback("Repository folder already exists! Aborting.")
+		}else{
+			jetpack.dir(path);
+			jetpack.write(path + '/README.md', "A Vuex-GitStore Data Repository. https://github.com/khphillips/vuex-gitstore")
+			var git = _git(path)
+				.init()
+				.add('./*');
+			//then save the current data...	
+			git.commit("First commit! Initializing Data");
+			callback();
+		}
 	},
 
 
-	//give the information find out which is the most approrpriate repo to store...
-	//If the object passed has a "repo" assigned, then store it there
-	//Next check if the fitstore state has a repo assigned
-	//last if none of the others, use the repo assigned int he options when plugin was installed. 
-	whichRepo(object, state){
-		if (typeof object != 'undefined' && typeof object.repo != 'undefined' && object.repo != null){
-			return object.repo;
+	loadLocalRepo(repo, callback){
+		var path = this.root_path + repo;
+		console.log('loading', path)
+		if(!jetpack.exists(path)){
+			callback("Repository folder does not exist!")
+		}else{
+			callback();
+			this.refreshStateFromRepo(true)
 		}
-		if (typeof state.gitstore != 'undefined' && state.gitstore != null){
-			if (typeof state.gitstore.repo != 'undefined' && state.gitstore.repo != null){
-				return state.gitstore.repo;
-			}
-		}
-		return this.repo;
 	},
 
 
@@ -178,12 +213,14 @@ export default {
 	 * @return {[type]}      [description]
 	 */
 	getObject(key, repo){
-		if (this.repo){
-			this.checkRepo(repo);
-			var path = this.root_path + this.repo + '/' + key + '.json';
+		console.log(key, repo)
+		if (repo){
+			//this.checkRepo(repo);
+			var path = this.root_path + repo + '/' + key + '.json';
 		}else{
 			path = this.root_path + key + '.json';
 		}
+		console.log('getting object from ', path)
 		var str = jetpack.read(path);
 		if (typeof str == 'undefined'){
 			return null
@@ -200,10 +237,10 @@ export default {
 	 * @param {[type]} repo  [description]
 	 */
     setObject(key, value, repo) {
+    	console.log(key, repo)
         value = JSON.stringify(value, null, 2);
         var g = this
-        if (this.repo){
-        	this.checkRepo(repo);
+        if (repo){
         	jetpack.writeAsync(this.root_path + repo + "/" + key + '.json', value)
         	this.commitObjects(key, repo);
         }else{
