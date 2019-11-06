@@ -4,6 +4,18 @@ const _git = require('simple-git')
 import merge from 'deepmerge';
 import GitStoreModule from './GitStoreModule'
 
+/**
+you must either start with a clone or start with an init and set the remote. 
+after that you can pull just fine. 
+maybe always pull if the repo exists initially on startup. (will need to happen anyways with first push)
+if no repo exists, don't cretae it until the repo and remote_url are set. 
+if one is set, then you will have to copy everything over to the new directory and then clone/init
+
+directory exists?
+is it a repo? 	if yes, then hopefully the remote is already set. you can then pull
+				if no, then you can either init or clone into it. 
+**/
+
 export default {
 	options : {},
 	key : null,
@@ -29,48 +41,19 @@ export default {
 
 		//returns to vues for install
 	    return function(store) {
+	    	console.log('plugin function')
 	    	g.store = store;
 	    	//register our module so we can store information about the repo. 
 	    	store.registerModule('gitstore', 
 			  	GitStoreModule
 			)
 
-	    	if (g.store.state.gitstore.remote_url != null && g.store.state.gitstore.repo != null){
-	    		this.repo = g.store.state.gitstore.repo;
-	    		this.checkRepo(g.store.state.gitstore.repo);
-		    	g.addRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url, function(){
-		    		g.pullFromRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url, function(){});
-		    	})
-	    	}
-
-	    	//grab the entired saved state from the repo
-	    	//TODO: do a pull from the remote if available to get the latest. 
-	    	var savedState = {};
-	    	var currentState = g.key ? store.state[g.key] : store.state;
-	    	//only update the state for items we have files for. 
-	    	for (var k in currentState){
-	    		if (k.indexOf('$') == -1){
-	    			var repo = g.whichRepo(currentState[k], currentState)
-    				var obj = g.getObject(k, currentState[k].repo != null ? currentState[k].repo : g.repo);
-	    			if (obj != null){
-	    				savedState[k] = obj;
-	    			}
-	    		}
-	    	}
-	    	var new_state = savedState
-	    	//if we have a key, then we will update the key of saved state with the new state from git repo. 
-	    	if (g.key){
-	    		new_state = {}
-	    		new_state[g.key] = savedState
-	    	}
-		    store.replaceState(merge(store.state, new_state, {
-		        clone: false,
-			}));
-		    
+	    	g.refreshStateFromRepo(g.key, store, g.repo, g)
 
 
-		    //subscribes to ALL changes
+	    	//subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
+		    	console.log('subscribe', mutation);
 		    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
 		    	if(g.key != null){
 		    		var key = mutation.payload.entity;
@@ -97,6 +80,33 @@ export default {
 	    }
 	},
 
+	refreshStateFromRepo(key, store, repo, g){
+
+		//grab the entired saved state from the repo
+    	//TODO: do a pull from the remote if available to get the latest. 
+    	var savedState = {};
+    	var currentState = key ? store.state[g.key] : store.state;
+    	//only update the state for items we have files for. 
+    	for (var k in currentState){
+    		if (k.indexOf('$') == -1){
+				var obj = g.getObject(k, repo);
+    			if (obj != null){
+    				savedState[k] = obj;
+    			}
+    		}
+    	}
+    	var new_state = savedState;
+    	if (g.key){
+    		new_state = {}
+    		new_state[g.key] = savedState
+    	}
+	    store.replaceState(merge(store.state, new_state, {
+	        clone: false,
+		}));
+    	return savedState;
+	},
+
+
 	//give the information find out which is the most approrpriate repo to store...
 	//If the object passed has a "repo" assigned, then store it there
 	//Next check if the fitstore state has a repo assigned
@@ -113,6 +123,27 @@ export default {
 		return this.repo;
 	},
 
+
+	setupRepo(repo, url, callback){
+		console.log('setup')
+		var path = this.root_path + repo;
+		if(jetpack.exists(path)){
+			_git(path)
+				.checkIsRepo(function(err, data){
+					console.log(err, data);
+					callback();
+				})
+		}else{
+			//make the directory
+			jetpack.dir(this.root_path + repo);
+			_git(this.root_path + repo)
+    			.clone(url, this.root_path + repo, function(err, data){
+		    		console.log('cloned')
+		    		callback();
+		    	})
+		}
+	},
+
 	/**
 	 * Checks if the repo exists, if not create the path and initializes repo
 	 * @param  {[type]} repo [description]
@@ -121,7 +152,9 @@ export default {
 	checkRepo(repo){
 		if (repo){
 			if(!jetpack.exists(this.root_path + repo)){
-				this.initRepo(repo);
+				jetpack.dir(this.root_path + repo);
+				_git(this.root_path + repo)
+					.init()
 			}
 		}
 	},
@@ -132,10 +165,8 @@ export default {
 	 * @return {[type]}      [description]
 	 */
 	initRepo(repo){
-		jetpack.dir(this.root_path + repo);
 		jetpack.write(this.root_path + repo + '/README.md', "A Vuex-GitStore Data Repository. https://github.com/khphillips/vuex-gitstore")
 		_git(this.root_path + repo)
-			.init()
 			.add('./*')
 			.commit("First commit! Initializing Data")
 	},
@@ -204,8 +235,12 @@ export default {
 
     addRemote(repo, url, callback){
     	var g = _git(this.root_path + repo);
-    	var remotes = g.listRemote(['--get-url'], function(err, data){
-    		console.log(err, data)
+    	g.addRemote('origin', url, function(err, data){
+		    		callback();
+		    	})
+    	return;
+    	var remotes = g.getRemotes({'verbose' : true}, function(err, data){
+    		console.log('adding remote', err, data)
     		if (err){
     			g.addRemote('origin', url, function(err, data){
 		    		callback();
@@ -226,12 +261,28 @@ export default {
     },
 
     pullFromRemote(repo, url, callback){
+    	var g = this;
+    	g.addRemote(repo, url, callback)
     	console.log('pullling');
-    	var g = _git(this.root_path + repo)
-    		.pull('origin', 'master', function(f){
-	    		console.log('remote added', f)
-	    		callback();
+    	_git(this.root_path + repo)
+    		.pull('origin', 'master', function(err, data){
+	    		console.log('pulled2')
+	    		g.refreshStateFromRepo(g.key, g.store, repo, g)
+	    		callback(err, data);
 	    	})
+    },
+
+    cloneFromRemote(repo, url, callback){
+    	var g = this;
+    	console.log('cloning');
+    	//make the directory
+		jetpack.dir(this.root_path + repo);
+		_git(this.root_path)
+			.clone(url, repo, function(err, data){
+	    		console.log('cloned')
+	    		g.refreshStateFromRepo(g.key, g.store, repo, g)
+	    		callback();
+		    })
     }
     
 }
