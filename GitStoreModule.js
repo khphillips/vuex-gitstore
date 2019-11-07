@@ -10,6 +10,7 @@ export default {
         repo : null,
         error : [],
         init : false,
+        repoList : [],
     },
     mutations: {
     	commitUser (state, user){
@@ -23,6 +24,10 @@ export default {
         commitRepo (state, repo){
             state.repo = repo.repo;
             state.remote_url = repo.remote_url;
+        },
+        commitRepoList (state, repolist){
+            console.log('setting list')
+            state.repoList =repolist.slice(0)
         },
         commitError(state, err){
             state.error = err;
@@ -105,6 +110,10 @@ export default {
                 GitStore.refreshStateFromRepo()
             }
         },
+        setRepoList : ({commit}, payload) =>{
+            console.log('setting repo list');
+            commit('commitRepoList', payload);
+        }
         
     },
     getters: {}

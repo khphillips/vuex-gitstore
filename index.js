@@ -41,7 +41,6 @@ export default {
 
 		//returns to vues for install
 	    var f = function(store) {
-	    	console.log('plugin function')
 	    	g.store = store;
 	    	//register our module so we can store information about the repo. 
 	    	store.registerModule('gitstore', 
@@ -49,11 +48,14 @@ export default {
 			)
 
 	    	g.refreshStateFromRepo()
+	    	console.log('getting list')
+	    	setTimeout(function(){
+	    		g.store.dispatch('gitstore/setRepoList', g.repoList())
+	    	}, 1000);
 
 	    	//var g = this;
 	    	//subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
-		    	console.log('subscribe', mutation);
 		    	var repo = state.gitstore.repo;
 		    	if (state.gitstore.repo){
 			    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
@@ -84,6 +86,10 @@ export default {
 	    return f;
 	},
 
+	repoList(){
+		console.log(jetpack.list(this.root_path))
+		return jetpack.list(this.root_path);
+	},
 
 	commitFullStateToJson(repo){
 		if (repo){
@@ -92,11 +98,9 @@ export default {
 	    	}else{
 	    		state = this.store.state;
 	    	}
-	    	console.log(repo, this.key, state)
 	    	//if object is marked as "persist == false" then don't store it.
 	    	for (var k in state){
 	    		if (k.indexOf('$') == -1 && (typeof state[k].persist != 'undefined' || state[k].persist === true) ){
-	    			console.log('setting object', k)
 	    			this.setObject(k, state[k], repo);
 	    		}
 		    }
@@ -169,18 +173,17 @@ export default {
 					.init()
 					.add('./*');
 				git.commit("First commit! Initializing Data");
-				console.log(remote_url)
 				if(remote_url != null && remote_url != ''){
-					console.log('pushing')
 					git.addRemote('origin', remote_url)
 						.push('origin', 'master', function(err, data){
-							console.log(err)
 							if (err){
 								jetpack.remove(path);
 							}
+							g.store.dispatch('gitstore/setRepoList', g.repoList())
 							resolve(err)
 						})
 				}else{
+					g.store.dispatch('gitstore/setRepoList', g.repoList())
 					resolve()
 				}
 			})
@@ -191,7 +194,6 @@ export default {
 	loadRepo(repo){
 		var g = this;
 		var path = this.root_path + repo;
-		console.log('loading', path)
 		if(!jetpack.exists(path)){
 			return new Promise(function(resolve, reject){
 				resolve("Repository folder does not exist!")
@@ -202,6 +204,7 @@ export default {
 				resolve()
 			})
 		}
+		store.dispatch('setRepoList', this.repoList())
 	},
 
 
@@ -294,7 +297,6 @@ export default {
     },
 
     pullFromRemote(repo, url){
-    	console.log('pullling');
     	var g = this;	
     	var path = this.root_path + repo;
     	return new Promise(function(resolve, reject){
@@ -310,7 +312,6 @@ export default {
     cloneFromRemote(repo, url, callback){
     	var g = this;
     	var path = this.root_path + repo;
-    	console.log('cloning', path);
     	if(jetpack.exists(path)){
 			return new Promise(function(resolve, reject){
 				resolve("Repository folder already exists! Aborting.")
@@ -321,12 +322,12 @@ export default {
 			return new Promise(function(resolve, reject){
 				_git(g.root_path)
 					.clone(url, repo, function(err, data){
-			    		console.log('cloned+', err)
 			    		if (err){
 							jetpack.remove(path);
 						}else{
 							g.refreshStateFromRepo(repo, true)
 						}
+						g.store.dispatch('gitstore/setRepoList', g.repoList())
 			    		resolve(err);
 				    })
 			})
