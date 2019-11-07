@@ -30,72 +30,82 @@ export default {
     },
     actions: {
     	setUser : ({commit}, payload) =>{
-    		commit('commitUser', payload);
+            commit('commitUser', payload);
+            return{err: null, data: null}
     	},
-        setRepo : ({commit}, payload) =>{
-            console.log('set repo payload', payload)
-            if (payload.repo != null && payload.remote_url == null){
-                //local repo only
-                GitStore.newLocalRepo(payload.repo, function(err){
-                    if (err){
-                        console.log(err)
-                    }else{
-                        commit('commitRepo', payload);
-                    }
-                })
-            }else if (payload.repo != null && payload.remote_url != null){
-                //repo with remote
-            }else{
-                console.log('no repo')
-            }
-        },
         loadRepo : ({commit}, payload) =>{
-            console.log('load repo payload', payload)
-            if (payload.repo != null && payload.remote_url == null){
-                //local repo only
-                GitStore.loadLocalRepo(payload.repo, function(err){
-                    console.log(err)
-                    commit('commitRepo', payload);
+            if (payload.repo != null){
+                console.log('loading')
+                return new Promise ((resolve, reject) => {
+                    var err = GitStore.loadRepo(payload.repo).then(function(err){
+                        if (err){
+                            resolve(err);
+                        }else{
+                            commit('commitRepo', payload);
+                            resolve();
+                        }
+                    })
                 })
-            }else if (payload.repo != null && payload.remote_url != null){
-                //repo with remote
             }else{
                 console.log('no repo')
+                return{err: null, data: null}
             }
         },
-        localRepo : ({commit}, payload) =>{
-            console.log('local repo')
-            GitStore.newLocalRepo(payload.repo, function(err){
-                if (err){
-                    commit('commitError', err);
-                }
-                console.log('comitting new local', payload)
-                payload.action = 'init'
-                commit('commitRepo', payload);
-            })
+        newRepo : ({commit}, payload) =>{
+            console.log('new repo', payload)
+            if (payload.repo != null){
+                return new Promise ((resolve, reject) => {
+                    var err = GitStore.newRepo(payload.repo, payload.remote_url).then(function(err){
+                        if (err){
+                            resolve(err);
+                        }else{
+                            commit('commitRepo', payload);
+                            resolve();
+                        }
+                    })
+                })
+            }else{
+                console.log('no repo')
+                return{err: null, data: null}
+            }
         },
-        initRepo : ({commit}, payload) =>{
-            payload.action = 'pull'
-            //commit('commitRepo', payload);
+        cloneRepo : ({commit}, payload) =>{
+            console.log('cloning repo')
+            if (payload.repo != null){
+                return new Promise ((resolve, reject) => {
+                    GitStore.cloneFromRemote(payload.repo, payload.remote_url).then(function(err){
+                        if (err){
+                            resolve(err);
+                        }else{
+                            commit('commitRepo', payload);
+                            resolve();
+                        }
+                    })
+                })
+            }else{
+                console.log('no repo')
+                return{err: null, data: null}
+            }
+
         },
         pullRepo : ({commit}, payload) =>{
-            console.log('pulling')
+            console.log('pulling repo')
             if (payload.remote_url){
-                GitStore.pullFromRemote(payload.repo, payload.remote_url, function(err){
-                    console.log('comitting', payload)
-                    payload.action = 'init'
-                    commit('commitRepo', payload);
+                return new Promise ((resolve, reject) => {
+                    GitStore.pullFromRemote(payload.repo, payload.remote_url).then(function(err){
+                        if (err){
+                            resolve(err);
+                        }else{
+                            commit('commitRepo', payload);
+                            resolve();
+                        }
+                    })
                 })
             }else{
                 GitStore.refreshStateFromRepo()
             }
         },
-        cloneRepo : ({commit}, payload) =>{
-            console.log('cloning')
-            GitStore.cloneFromRemote(payload.repo, payload.remote_url, function(err){
-                commit('commitRepo', payload);
-            })
-        },
+        
     },
     getters: {}
 }

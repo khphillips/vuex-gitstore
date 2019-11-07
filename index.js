@@ -22,6 +22,8 @@ export default {
 	repo : null,
 	root_path : null,
 	store : {},
+	last_push : 0,
+	push_scheduled : false,
 
 	install(options){
 		this.options = this.options || {};
@@ -83,44 +85,64 @@ export default {
 	},
 
 
+	commitFullStateToJson(repo){
+		if (repo){
+	    	if(this.key != null){
+	    		var state = this.store.state[this.key];
+	    	}else{
+	    		state = this.store.state;
+	    	}
+	    	console.log(repo, this.key, state)
+	    	//if object is marked as "persist == false" then don't store it.
+	    	for (var k in state){
+	    		if (k.indexOf('$') == -1 && (typeof state[k].persist != 'undefined' || state[k].persist === true) ){
+	    			console.log('setting object', k)
+	    			this.setObject(k, state[k], repo);
+	    		}
+		    }
+	    }else{
+	    	console.log('no repo - no save');
+	    }
+	},
+
 	//loads all files in repo and refreshes the state.
-	refreshStateFromRepo(overwrite){
+	refreshStateFromRepo(repo, overwrite){
 		var key = this.key
 		var store = this.store
 		var g = this;
-		if(store.state.gitstore.repo){
-			var path = this.root_path + store.state.gitstore.repo;
+		if(repo){
+			var path = this.root_path + repo;
 			console.log('path', path);
 			var git = _git()
     			.pull('origin', 'master', function(err, data){
-		    		console.log('pulled before refresh2', path)
-		    		console.log('error?', err)
+    				console.log('pull complete')
 		    		//grab the entired saved state from the repo
 			    	//TODO: do a pull from the remote if available to get the latest. 
 			    	var savedState = {};
 			    	var currentState = key ? store.state[key] : store.state;
+			    	var noData = true;
 			    	//only update the state for items we have files for.
-			    	console.log(currentState) 
 			    	for (var k in currentState){
 			    		if (k.indexOf('$') == -1){
-			    			console.log(store.state.gitstore.repo)
-							var obj = g.getObject(k, store.state.gitstore.repo);
+							var obj = g.getObject(k, repo);
 			    			if (obj != null){
 			    				savedState[k] = obj;
+			    				noData = false;
 			    			}
 			    		}
+			    	}
+			    	//if the folder is empty then stop
+			    	if(noData){
+			    		return;
 			    	}
 			    	var new_state = savedState;
 			    	if (key){
 			    		new_state = {}
 			    		new_state[key] = savedState
 			    	}
-			    	console.log(new_state)
 			    	if(overwrite === true){
-			    		console.log('overwriting', {...store.state, ...new_state})
 			    		store.replaceState({...store.state, ...new_state});
 			    	}else{
-			    		console.log('merging')
 			    		store.replaceState(merge(store.state, new_state, {
 				        	clone: false,
 						}));
@@ -130,81 +152,59 @@ export default {
 	    }
 	},
 
-	newLocalRepo(repo, callback){
+	newRepo(repo, remote_url){
+		var g = this;
 		var path = this.root_path + repo;
 		if(jetpack.exists(path)){
-			callback("Repository folder already exists! Aborting.")
+			return new Promise(function(resolve, reject){
+				resolve("Repository folder already exists! Aborting.")
+			})
 		}else{
-			jetpack.dir(path);
-			jetpack.write(path + '/README.md', "A Vuex-GitStore Data Repository. https://github.com/khphillips/vuex-gitstore")
-			var git = _git(path)
-				.init()
-				.add('./*');
-			//then save the current data...	
-			git.commit("First commit! Initializing Data");
-			callback();
+			return new Promise(function(resolve, reject){
+				jetpack.dir(path);
+				jetpack.write(path + '/README.md', "A Vuex-GitStore Data Repository. https://github.com/khphillips/vuex-gitstore")
+				//then save the current data...
+				g.commitFullStateToJson(repo);
+				var git = _git(path)
+					.init()
+					.add('./*');
+				git.commit("First commit! Initializing Data");
+				console.log(remote_url)
+				if(remote_url != null && remote_url != ''){
+					console.log('pushing')
+					git.addRemote('origin', remote_url)
+						.push('origin', 'master', function(err, data){
+							console.log(err)
+							if (err){
+								jetpack.remove(path);
+							}
+							resolve(err)
+						})
+				}else{
+					resolve()
+				}
+			})
 		}
 	},
 
 
-	loadLocalRepo(repo, callback){
+	loadRepo(repo){
+		var g = this;
 		var path = this.root_path + repo;
 		console.log('loading', path)
 		if(!jetpack.exists(path)){
-			callback("Repository folder does not exist!")
+			return new Promise(function(resolve, reject){
+				resolve("Repository folder does not exist!")
+			})
 		}else{
-			callback();
-			this.refreshStateFromRepo(true)
+			return new Promise(function(resolve, reject){
+				g.refreshStateFromRepo(repo, true)
+				resolve()
+			})
 		}
 	},
 
 
-	setupRepo(repo, url, callback){
-		console.log('setup')
-		var path = this.root_path + repo;
-		if(jetpack.exists(path)){
-			_git(path)
-				.checkIsRepo(function(err, data){
-					console.log(err, data);
-					callback();
-				})
-		}else{
-			//make the directory
-			jetpack.dir(this.root_path + repo);
-			_git(this.root_path + repo)
-    			.clone(url, this.root_path + repo, function(err, data){
-		    		console.log('cloned')
-		    		callback();
-		    	})
-		}
-	},
-
-	/**
-	 * Checks if the repo exists, if not create the path and initializes repo
-	 * @param  {[type]} repo [description]
-	 * @return {[type]}      [description]
-	 */
-	checkRepo(repo){
-		if (repo){
-			if(!jetpack.exists(this.root_path + repo)){
-				jetpack.dir(this.root_path + repo);
-				_git(this.root_path + repo)
-					.init()
-			}
-		}
-	},
-
-	/**
-	 * Creates the directory and initializes the repo with the default readme file. 
-	 * @param  {[type]} repo [description]
-	 * @return {[type]}      [description]
-	 */
-	initRepo(repo){
-		jetpack.write(this.root_path + repo + '/README.md', "A Vuex-GitStore Data Repository. https://github.com/khphillips/vuex-gitstore")
-		_git(this.root_path + repo)
-			.add('./*')
-			.commit("First commit! Initializing Data")
-	},
 
 	/**
 	 * Workhorse... gets a key from the repo, parses the json and returns it. 
@@ -263,63 +263,74 @@ export default {
     			.add(key + '.json')
        			.commit("Data update: " + key);
        	if (this.store.state.gitstore.remote_url != null && this.store.state.gitstore.repo != null){
-       		var g = this;
-    		this.addRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url, function(){
-    			g.pushToRemote(g.store.state.gitstore.repo, g.store.state.gitstore.remote_url);
-    		})
+       		this.pushToRemote(this.store.state.gitstore.repo, this.store.state.gitstore.remote_url);
     	}
     },
 
-    addRemote(repo, url, callback){
-    	var g = _git(this.root_path + repo);
-    	g.addRemote('origin', url, function(err, data){
-		    		callback();
-		    	})
-    	return;
-    	var remotes = g.getRemotes({'verbose' : true}, function(err, data){
-    		console.log('adding remote', err, data)
-    		if (err){
-    			g.addRemote('origin', url, function(err, data){
-		    		callback();
-		    	})
-    		}else{
-    			callback();
-    		}
-    	});
-    },
-
-    pushToRemote(repo, url, callback){
-    	console.log('pushing');
-    	var g = _git(this.root_path + repo)
+    pushToRemote(repo, url){
+    	//debounce the pushing... or we may have prollems. 
+    	var now = Date.now();
+    	var g = this
+    	if(now - this.last_push > 5000){
+    		_git(this.root_path + repo)
     		.push('origin', 'master', function(err, data){
-	    		console.log('pushed', err, data)
-	    		callback();
+	    		now = Date.now();
+	    		g.last_push = now
+	    		g.push_scheduled = false;
+	    		//if err then we should handle it...
+	    		if(err){
+	    			g.store.state.gitstore.error.push(err)
+	    		}
 	    	})
+	    	this.last_push = now
+    	}else{
+    		if (!this.push_scheduled){
+    			setTimeout(function(){g.pushToRemote(repo, url)}, 5000);
+    			this.push_scheduled = true;
+    		}
+    	}
+    	
+    	
     },
 
-    pullFromRemote(repo, url, callback){
-    	var g = this;
-    	g.addRemote(repo, url, callback)
+    pullFromRemote(repo, url){
     	console.log('pullling');
-    	_git(this.root_path + repo)
+    	var g = this;	
+    	var path = this.root_path + repo;
+    	return new Promise(function(resolve, reject){
+    		_git(this.root_path + repo)
     		.pull('origin', 'master', function(err, data){
-	    		console.log('pulled2')
-	    		g.refreshStateFromRepo(g.key, g.store, repo, g)
-	    		callback(err, data);
+	    		console.log('pull done!')
+	    		g.refreshStateFromRepo(repo, true)
+	    		resolve(err);
 	    	})
+    	})
     },
 
     cloneFromRemote(repo, url, callback){
     	var g = this;
-    	console.log('cloning');
-    	//make the directory
-		jetpack.dir(this.root_path + repo);
-		_git(this.root_path)
-			.clone(url, repo, function(err, data){
-	    		console.log('cloned')
-	    		g.refreshStateFromRepo(g.key, g.store, repo, g)
-	    		callback();
-		    })
+    	var path = this.root_path + repo;
+    	console.log('cloning', path);
+    	if(jetpack.exists(path)){
+			return new Promise(function(resolve, reject){
+				resolve("Repository folder already exists! Aborting.")
+			})
+		}else{
+			//make the directory
+			jetpack.dir(path);
+			return new Promise(function(resolve, reject){
+				_git(g.root_path)
+					.clone(url, repo, function(err, data){
+			    		console.log('cloned+', err)
+			    		if (err){
+							jetpack.remove(path);
+						}else{
+							g.refreshStateFromRepo(repo, true)
+						}
+			    		resolve(err);
+				    })
+			})
+		}
     }
     
 }
