@@ -56,12 +56,13 @@ export default {
 	    	//var g = this;
 	    	//subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
+		    	console.log("+++++ gonna update repo from state mutation!")
 		    	var repo = state.gitstore.repo;
 		    	if (state.gitstore.repo){
-			    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
-			    	if(g.key != null){
-			    		var key = mutation.payload.entity;
-			    		var key_state = state[g.key][mutation.payload.entity];
+			    	//if we have a key we are looking under use that...
+			    	if(g.key != null && typeof mutation.payload.entity != 'undefined'){
+		    			var key = mutation.payload.entity; /// this is a vue orm thing only... will cause problems for others... 
+		    			var key_state = state[g.key][mutation.payload.entity];
 			    	}else{
 			    		key = null;
 			    		if (mutation.type.indexOf('/')){
@@ -70,13 +71,15 @@ export default {
 			    			key_state = state[key]
 			    		}else{
 			    			//don't have a key, grab the data from the root of state.
-			    			key = mutation.payload.entity;
+			    			key = mutation.type;
 			    			key_state = state[key];
 			    		}
 			    	}
 			    	//if object is marked as "persist == false" then don't store it. 
 			    	if (typeof key_state != 'undefined' && (typeof key_state.persist == 'undefined' || key_state.persist === true) ){
-			    		g.setObject(key, key_state, repo);
+			    		g.setObject(key, key_state, repo);		    		
+			    	}else{
+			    		console.log("----done... persist is false", key_state, key, mutation)
 			    	}
 			    }else{
 			    	console.log('no repo - no save');
@@ -111,49 +114,63 @@ export default {
 
 	//loads all files in repo and refreshes the state.
 	refreshStateFromRepo(repo, overwrite){
+		console.log("refreshing state from repo")
 		var key = this.key
 		var store = this.store
 		var g = this;
-		if(repo){
-			var path = this.root_path + repo;
-			console.log('path', path);
-			var git = _git()
-    			.pull('origin', 'master', function(err, data){
-    				console.log('pull complete')
-		    		//grab the entired saved state from the repo
-			    	//TODO: do a pull from the remote if available to get the latest. 
-			    	var savedState = {};
-			    	var currentState = key ? store.state[key] : store.state;
-			    	var noData = true;
-			    	//only update the state for items we have files for.
-			    	for (var k in currentState){
-			    		if (k.indexOf('$') == -1){
-							var obj = g.getObject(k, repo);
-			    			if (obj != null){
-			    				savedState[k] = obj;
-			    				noData = false;
-			    			}
-			    		}
-			    	}
-			    	//if the folder is empty then stop
-			    	if(noData){
-			    		return;
-			    	}
-			    	var new_state = savedState;
-			    	if (key){
-			    		new_state = {}
-			    		new_state[key] = savedState
-			    	}
-			    	if(overwrite === true){
-			    		store.replaceState({...store.state, ...new_state});
-			    	}else{
-			    		store.replaceState(merge(store.state, new_state, {
-				        	clone: false,
-						}));
-			    	}
-				    
-		    	})
-	    }
+		return new Promise(function(resolve, reject){
+			if(repo){
+				var path = g.root_path + repo;
+				var git = _git()
+					.fetch('origin', 'master', function(err, data){
+		    			git.merge(['origin/master'], function(err, data){
+		    				console.log('fetch merge done!', err, data)
+				    		console.log('pull complete', err, data)	
+		    				g.replaceState(repo, overwrite);
+		    				resolve();
+		    			})
+			    	})
+		    }else{
+		    	resolve();
+		    }
+		})
+	},
+
+	replaceState(repo, overwrite){
+		var key = this.key
+		var store = this.store
+		var g = this;
+		//grab the entired saved state from the repo
+    	//TODO: do a pull from the remote if available to get the latest. 
+    	var savedState = {};
+    	var currentState = key ? store.state[key] : store.state;
+    	var noData = true;
+    	//only update the state for items we have files for.
+    	for (var k in currentState){
+    		if (k.indexOf('$') == -1){
+				var obj = g.getObject(k, repo);
+    			if (obj != null){
+    				savedState[k] = obj;
+    				noData = false;
+    			}
+    		}
+    	}
+    	//if the folder is empty then stop
+    	if(noData){
+    		return;
+    	}
+    	var new_state = savedState;
+    	if (key){
+    		new_state = {}
+    		new_state[key] = savedState
+    	}
+    	if(overwrite === true){
+    		store.replaceState({...store.state, ...new_state});
+    	}else{
+    		store.replaceState(merge(store.state, new_state, {
+	        	clone: false,
+			}));
+    	}
 	},
 
 	newRepo(repo, remote_url){
@@ -191,7 +208,20 @@ export default {
 	},
 
 
+	getRemotes(repo){
+		var g = this;
+		var path = this.root_path + repo;
+		return new Promise(function(resolve, reject){
+			var git = _git(path)
+				.getRemotes(true, function(err, data){
+					resolve(data);
+				})
+		});
+	},
+
+
 	loadRepo(repo){
+		console.log("loading repo")
 		var g = this;
 		var path = this.root_path + repo;
 		if(!jetpack.exists(path)){
@@ -200,8 +230,9 @@ export default {
 			})
 		}else{
 			return new Promise(function(resolve, reject){
-				g.refreshStateFromRepo(repo, true)
-				resolve()
+				g.refreshStateFromRepo(repo, true).then(function(){
+					resolve();
+				})
 			})
 		}
 		store.dispatch('setRepoList', this.repoList())
@@ -216,16 +247,15 @@ export default {
 	 * @return {[type]}      [description]
 	 */
 	getObject(key, repo){
-		console.log(key, repo)
 		if (repo){
 			//this.checkRepo(repo);
 			var path = this.root_path + repo + '/' + key + '.json';
 		}else{
 			path = this.root_path + key + '.json';
 		}
-		console.log('getting object from ', path)
+		console.log("getObject ", path)
 		var str = jetpack.read(path);
-		if (typeof str == 'undefined'){
+		if (typeof str == 'undefined' || str == ''){
 			return null
 		}
         return JSON.parse(str);
@@ -240,13 +270,35 @@ export default {
 	 * @param {[type]} repo  [description]
 	 */
     setObject(key, value, repo) {
-    	console.log(key, repo)
+    	console.log("setting object key value repo", key, value, repo)
         value = JSON.stringify(value, null, 2);
         var g = this
         if (repo){
-        	jetpack.writeAsync(this.root_path + repo + "/" + key + '.json', value)
-        	this.commitObjects(key, repo);
+	        g.getRemotes(repo).then(function(remotes){
+	        	console.log("done getting remotes", remotes)
+				//this repo has remotes, we need to pull first... 
+				if (remotes.length > 0){
+					console.log("we have a remote so gonna pull", remotes[0])
+					g.pullFromRemote(repo, g.store.state.gitstore.remote_url).then(function(err){
+	    				console.log('pulled done... ', err)
+	    				if (err){
+	    					console.log(err);
+	    					g.store.state.gitstore.error.push(err);
+	    				}else{
+	    					console.log('writing object & commit')
+	    					jetpack.writeAsync(g.root_path + repo + "/" + key + '.json', value)
+        					g.commitObjects(key, repo, true);
+	    				}
+	    			})
+				}else{
+					console.log("no remote... commit awaaays...")
+					//note remotes... we can go ahead and commit. 
+					jetpack.writeAsync(g.root_path + repo + "/" + key + '.json', value)
+        			g.commitObjects(key, repo, false);
+				}
+			});	
         }else{
+        	//no repo...
         	jetpack.writeAsync(this.root_path + key + '.json', value)
         }
     },
@@ -257,7 +309,7 @@ export default {
      * @param  {[type]} repo [description]
      * @return {[type]}      [description]
      */
-    commitObjects(key, repo){
+    commitObjects(key, repo, has_remote){
     	var username = this.store.state.gitstore.username ? this.store.state.gitstore.username : 'gitData'
     	var email = this.store.state.gitstore.email ? this.store.state.gitstore.email : 'gitData@gitData.com'
     	var git = _git(this.root_path + repo)
@@ -265,12 +317,13 @@ export default {
     			.addConfig('user.email', email)
     			.add(key + '.json')
        			.commit("Data update: " + key);
-       	if (this.store.state.gitstore.remote_url != null && this.store.state.gitstore.repo != null){
-       		this.pushToRemote(this.store.state.gitstore.repo, this.store.state.gitstore.remote_url);
+       	if (has_remote){
+       		this.pushToRemote(this.store.state.gitstore.repo);
     	}
     },
 
-    pushToRemote(repo, url){
+    pushToRemote(repo){
+    	console.log("pushing to remote")
     	//debounce the pushing... or we may have prollems. 
     	var now = Date.now();
     	var g = this
@@ -284,11 +337,12 @@ export default {
 	    		if(err){
 	    			g.store.state.gitstore.error.push(err)
 	    		}
+	    		console.log("push done", err, data)
 	    	})
 	    	this.last_push = now
     	}else{
     		if (!this.push_scheduled){
-    			setTimeout(function(){g.pushToRemote(repo, url)}, 5000);
+    			setTimeout(function(){g.pushToRemote(repo)}, 5000);
     			this.push_scheduled = true;
     		}
     	}
@@ -296,15 +350,21 @@ export default {
     	
     },
 
-    pullFromRemote(repo, url){
+    pullFromRemote(repo){
     	var g = this;	
     	var path = this.root_path + repo;
     	return new Promise(function(resolve, reject){
-    		_git(this.root_path + repo)
-    		.pull('origin', 'master', function(err, data){
-	    		console.log('pull done!')
-	    		g.refreshStateFromRepo(repo, true)
-	    		resolve(err);
+    		var git = _git(g.root_path + repo)
+    		.outputHandler((command, stdout, stderr) => {
+		        stdout.pipe(process.stdout);
+		        stderr.pipe(process.stderr);
+		     })
+    		.fetch('origin', 'master', function(err, data){
+    			git.merge(['origin/master'], function(err, data){
+    				console.log('fetch merge done!', err, data)
+		    		//g.replaceState(repo, true);
+		    		resolve(err);
+    			})
 	    	})
     	})
     },
@@ -324,11 +384,15 @@ export default {
 					.clone(url, repo, function(err, data){
 			    		if (err){
 							jetpack.remove(path);
+							g.store.dispatch('gitstore/setRepoList', g.repoList())
+			    			resolve(err);
 						}else{
-							g.refreshStateFromRepo(repo, true)
+							g.refreshStateFromRepo(repo, true).then(function(){
+								g.store.dispatch('gitstore/setRepoList', g.repoList())
+			    				resolve(err);
+							})
 						}
-						g.store.dispatch('gitstore/setRepoList', g.repoList())
-			    		resolve(err);
+						
 				    })
 			})
 		}

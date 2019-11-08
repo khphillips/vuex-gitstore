@@ -26,8 +26,12 @@ export default {
             state.remote_url = repo.remote_url;
         },
         commitRepoList (state, repolist){
-            console.log('setting list')
-            state.repoList =repolist.slice(0)
+            if (typeof repolist != 'undefined' && repolist.length > 0){
+                state.repoList = repolist.slice(0)
+            }else{
+                state.repoList = []
+            }
+            
         },
         commitError(state, err){
             state.error = err;
@@ -95,9 +99,9 @@ export default {
         },
         pullRepo : ({commit}, payload) =>{
             console.log('pulling repo')
-            if (payload.remote_url){
+            if (payload.repo){
                 return new Promise ((resolve, reject) => {
-                    GitStore.pullFromRemote(payload.repo, payload.remote_url).then(function(err){
+                    GitStore.refreshStateFromRepo(payload.repo).then(function(err){
                         if (err){
                             resolve(err);
                         }else{
@@ -107,7 +111,7 @@ export default {
                     })
                 })
             }else{
-                GitStore.refreshStateFromRepo()
+                return GitStore.refreshStateFromRepo()
             }
         },
         setRepoList : ({commit}, payload) =>{
