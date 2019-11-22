@@ -47,14 +47,21 @@ export default {
 			  	GitStoreModule
 			)
 
-	    	//console.log('repo', store.state.gitstore.repo)
-	    	if(store.state.gitstore.repo == null){
-	    		//console.log("setting to ", g.repo)
-	    		store.commit('gitstore/commitRepo', {repo:g.repo})
-	    	}
+	    	
+
 	    	//console.log('repo', store.state.gitstore.repo)
 	    	//console.log(store)
 	    	g.refreshStateFromRepo(g.repo, true)
+
+	    	//console.log('repo', store.state.gitstore.repo)
+	    	if(!jetpack.exists(g.root_path)){
+	    		jetpack.dir(g.root_path);
+	    	}
+	    	if (!g.store.state.gitstore.repo && g.repo){
+	    		g.newRepo(g.repo, null)
+	    		g.store.dispatch('gitstore/loadRepo', {repo : g.repo})
+	    	}
+	    	
 	    	//console.log('getting list')
 	    	setTimeout(function(){
 	    		g.store.dispatch('gitstore/setRepoList', g.repoList())
