@@ -29,7 +29,7 @@ export default {
 		this.options = this.options || {};
 		this.key = options.key || null; //'entities';//this is the vuex-orm default keys
 		this.root_path = options.root_path || 'gitstoreData/';
-
+		this.repo = options.repo || 'darknote'
 		//checks if repo exists as a folder and initializes one if not.
 		//if (this.repo){
 		//	if(!jetpack.exists(this.root_path + this.repo)){
@@ -47,16 +47,24 @@ export default {
 			  	GitStoreModule
 			)
 
-	    	g.refreshStateFromRepo()
-	    	console.log('getting list')
+	    	//console.log('repo', store.state.gitstore.repo)
+	    	if(store.state.gitstore.repo == null){
+	    		//console.log("setting to ", g.repo)
+	    		store.commit('gitstore/commitRepo', {repo:g.repo})
+	    	}
+	    	//console.log('repo', store.state.gitstore.repo)
+	    	//console.log(store)
+	    	g.refreshStateFromRepo(g.repo, true)
+	    	//console.log('getting list')
 	    	setTimeout(function(){
 	    		g.store.dispatch('gitstore/setRepoList', g.repoList())
 	    	}, 1000);
 
+
 	    	//var g = this;
 	    	//subscribes to ALL changes
 		    store.subscribe(function(mutation, state) {
-		    	var repo = state.gitstore.repo;
+
 		    	if (state.gitstore.repo){
 			    	//if we have a key we are looking under use that... probably gonna cause an issue with deeply nested data.
 			    	if(g.key != null){
@@ -76,10 +84,10 @@ export default {
 			    	}
 			    	//if object is marked as "persist == false" then don't store it. 
 			    	if (typeof key_state != 'undefined' && (typeof key_state.persist == 'undefined' || key_state.persist === true) ){
-			    		g.setObject(key, key_state, repo);
+			    		g.setObject(key, key_state, state.gitstore.repo);
 			    	}
 			    }else{
-			    	console.log('no repo - no save');
+			    	//console.log('no repo - no save');
 			    }
 		  	})
 	    }
@@ -87,7 +95,7 @@ export default {
 	},
 
 	repoList(){
-		console.log(jetpack.list(this.root_path))
+		//console.log(jetpack.list(this.root_path))
 		return jetpack.list(this.root_path);
 	},
 
@@ -105,7 +113,7 @@ export default {
 	    		}
 		    }
 	    }else{
-	    	console.log('no repo - no save');
+	    	//console.log('no repo - no save');
 	    }
 	},
 
@@ -116,10 +124,10 @@ export default {
 		var g = this;
 		if(repo){
 			var path = this.root_path + repo;
-			console.log('path', path);
+			//console.log('path', path);
 			var git = _git()
     			.pull('origin', 'master', function(err, data){
-    				console.log('pull complete')
+    				//console.log('pull complete')
 		    		//grab the entired saved state from the repo
 			    	//TODO: do a pull from the remote if available to get the latest. 
 			    	var savedState = {};
@@ -216,14 +224,14 @@ export default {
 	 * @return {[type]}      [description]
 	 */
 	getObject(key, repo){
-		console.log(key, repo)
+		//console.log(key, repo)
 		if (repo){
 			//this.checkRepo(repo);
 			var path = this.root_path + repo + '/' + key + '.json';
 		}else{
 			path = this.root_path + key + '.json';
 		}
-		console.log('getting object from ', path)
+		//console.log('getting object from ', path)
 		var str = jetpack.read(path);
 		if (typeof str == 'undefined'){
 			return null
@@ -240,7 +248,7 @@ export default {
 	 * @param {[type]} repo  [description]
 	 */
     setObject(key, value, repo) {
-    	console.log(key, repo)
+    	//console.log(key, repo)
         value = JSON.stringify(value, null, 2);
         var g = this
         if (repo){
@@ -302,7 +310,7 @@ export default {
     	return new Promise(function(resolve, reject){
     		_git(this.root_path + repo)
     		.pull('origin', 'master', function(err, data){
-	    		console.log('pull done!')
+	    		//console.log('pull done!')
 	    		g.refreshStateFromRepo(repo, true)
 	    		resolve(err);
 	    	})

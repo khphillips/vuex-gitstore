@@ -26,7 +26,7 @@ export default {
             state.remote_url = repo.remote_url;
         },
         commitRepoList (state, repolist){
-            console.log('setting list')
+            //console.log('setting list')
             state.repoList =repolist.slice(0)
         },
         commitError(state, err){
@@ -40,7 +40,7 @@ export default {
     	},
         loadRepo : ({commit}, payload) =>{
             if (payload.repo != null){
-                console.log('loading')
+                //console.log('loading')
                 return new Promise ((resolve, reject) => {
                     var err = GitStore.loadRepo(payload.repo).then(function(err){
                         if (err){
@@ -52,12 +52,12 @@ export default {
                     })
                 })
             }else{
-                console.log('no repo')
+                //console.log('no repo')
                 return{err: null, data: null}
             }
         },
         newRepo : ({commit}, payload) =>{
-            console.log('new repo', payload)
+            //console.log('new repo', payload)
             if (payload.repo != null){
                 return new Promise ((resolve, reject) => {
                     var err = GitStore.newRepo(payload.repo, payload.remote_url).then(function(err){
@@ -70,12 +70,12 @@ export default {
                     })
                 })
             }else{
-                console.log('no repo')
+                //console.log('no repo')
                 return{err: null, data: null}
             }
         },
         cloneRepo : ({commit}, payload) =>{
-            console.log('cloning repo')
+            //console.log('cloning repo')
             if (payload.repo != null){
                 return new Promise ((resolve, reject) => {
                     GitStore.cloneFromRemote(payload.repo, payload.remote_url).then(function(err){
@@ -88,13 +88,13 @@ export default {
                     })
                 })
             }else{
-                console.log('no repo')
+                //console.log('no repo')
                 return{err: null, data: null}
             }
 
         },
         pullRepo : ({commit}, payload) =>{
-            console.log('pulling repo')
+            //console.log('pulling repo')
             if (payload.remote_url){
                 return new Promise ((resolve, reject) => {
                     GitStore.pullFromRemote(payload.repo, payload.remote_url).then(function(err){
@@ -111,7 +111,7 @@ export default {
             }
         },
         setRepoList : ({commit}, payload) =>{
-            console.log('setting repo list');
+            //console.log('setting repo list');
             commit('commitRepoList', payload);
         }
         
